@@ -13,7 +13,7 @@ plt.style.use("dark_background")
 # -----------------------------
 # Logo file (put this in same folder as the .py in GitHub)
 # -----------------------------
-LOGO_PATH = "MIA logo 5.png"
+LOGO_PATH = "MIA logo 5.jpg"
 
 # -----------------------------
 # Config
@@ -42,6 +42,7 @@ SEED_CMPY_ID_MAP = {
 }
 DEFAULT_TICKERS = sorted(SEED_CMPY_ID_MAP.keys())
 
+
 # -----------------------------
 # Helpers: sync watchlist with cmpy_id_map
 # -----------------------------
@@ -69,6 +70,7 @@ def sync_watchlist_with_mapping(watchlist: pd.DataFrame, id_map: dict) -> pd.Dat
     wl = wl.drop_duplicates(subset=["Ticker"], keep="last")
     wl = wl.sort_values("Ticker").reset_index(drop=True)
     return wl
+
 
 # -----------------------------
 # PSE Edge fetch + parsing
@@ -109,6 +111,7 @@ def fetch_stock_snapshot(cmpy_id: int) -> dict:
         return snap
     except Exception:
         return {}
+
 
 # -----------------------------
 # dividends.ph raw dividends (always fetch)
@@ -173,6 +176,7 @@ def annual_totals_from_raw(raw_df: pd.DataFrame, years: int = 4) -> list[float]:
     g = g.tail(years)
     return g.tolist()
 
+
 # -----------------------------
 # DDM valuation helpers
 # -----------------------------
@@ -217,10 +221,11 @@ def dividend_trend(divs: list[float]) -> str:
         return f"↘ Declining (~{cagr*100:.1f}%/yr)"
     return f"→ Flat (~{cagr*100:.1f}%/yr)"
 
+
 # -----------------------------
 # UI styling
 # -----------------------------
-st.set_page_config(page_title="MIA Stock & Dividend Dashboard", page_icon="📈", layout="wide")
+st.set_page_config(page_title="Merlyn's Stock Valuation Dashboard", page_icon="📈", layout="wide")
 
 st.markdown(
     """
@@ -252,6 +257,7 @@ button[kind="primary"] {
   overflow: hidden;
   border: 1px solid rgba(120,120,120,0.18);
 }
+.title-green { color: #00C853; margin: 0; padding: 0; line-height: 1.05; }
 </style>
 """,
     unsafe_allow_html=True,
@@ -271,16 +277,16 @@ if "watchlist" not in st.session_state:
 st.session_state.watchlist = sync_watchlist_with_mapping(st.session_state.watchlist, st.session_state.cmpy_id_map)
 
 # -----------------------------
-# Title row with logo
+# Main Title row: logo + green title
 # -----------------------------
-tcol1, tcol2 = st.columns([0.18, 0.82], vertical_alignment="center")
+tcol1, tcol2 = st.columns([0.16, 0.84], vertical_alignment="center")
 with tcol1:
     try:
-        st.image(LOGO_PATH, width=120)
+        st.image(LOGO_PATH, width=95)
     except Exception:
         st.write("")
 with tcol2:
-    st.markdown("## MIA Stock & Dividend Dashboard")
+    st.markdown('<h2 class="title-green">Merlyn’s Stock Valuation Dashboard</h2>', unsafe_allow_html=True)
 
 # -----------------------------
 # Top explanation
@@ -368,7 +374,7 @@ with c2:
 with c3:
     st.selectbox("Min dividend points", [2, 3, 4], index=0, key="min_divs")
 
-left, mid, right = st.columns([1, 1.2, 1])
+_, mid, _ = st.columns([1, 1.2, 1])
 with mid:
     run_clicked = st.button("Run valuation", type="primary", use_container_width=True)
 
