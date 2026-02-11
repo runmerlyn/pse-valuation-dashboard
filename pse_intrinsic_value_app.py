@@ -4,6 +4,7 @@ import numpy as np
 import requests
 import re
 import base64
+from pathlib import Path
 from bs4 import BeautifulSoup
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
@@ -11,15 +12,15 @@ from matplotlib.ticker import FixedLocator
 
 plt.style.use("dark_background")
 
-# -----------------------------
-# Assets (put these in the same folder as the .py in GitHub)
-# -----------------------------
-LOGO_PATH = "MIA logo 5.jpg"
-LOBSTER_TTF = "Lobster-Regular.ttf"   # <-- add this file to your repo
+# =============================
+# ASSETS (must be in same folder as this .py on GitHub)
+# =============================
+LOGO_FILE = "MIA logo 5.jpg"
+FONT_FILE = "Lobster-Regular.ttf"
 
-# -----------------------------
-# Config
-# -----------------------------
+# =============================
+# CONFIG
+# =============================
 DEFAULT_DISCOUNT_RATE = 0.11
 DEFAULT_MARGIN_OF_SAFETY = 0.25
 HEADERS = {"User-Agent": "Mozilla/5.0"}
@@ -44,21 +45,160 @@ SEED_CMPY_ID_MAP = {
 }
 DEFAULT_TICKERS = sorted(SEED_CMPY_ID_MAP.keys())
 
-# -----------------------------
-# Load local font (no internet)
-# -----------------------------
-def load_local_font_base64(ttf_path: str) -> str | None:
-    try:
-        with open(ttf_path, "rb") as f:
-            return base64.b64encode(f.read()).decode("utf-8")
-    except Exception:
-        return None
+# =============================
+# PAGE
+# =============================
+st.set_page_config(page_title="Merlyn's Stock Valuation Dashboard", page_icon="📈", layout="wide")
 
-lobster_b64 = load_local_font_base64(LOBSTER_TTF)
+# =============================
+# FILE HELPERS (Cloud-safe)
+# =============================
+def file_to_base64(filename: str) -> tuple[str | None, str]:
+    base_dir = Path(__file__).resolve().parent
+    p = (base_dir / filename).resolve()
+    if p.exists() and p.is_file():
+        try:
+            return base64.b64encode(p.read_bytes()).decode("utf-8"), f"FOUND: {p}"
+        except Exception as e:
+            return None, f"FOUND but cannot read: {p} ({e})"
+    return None, f"NOT FOUND: {p}"
 
-# -----------------------------
+logo_b64, logo_debug = file_to_base64(LOGO_FILE)
+font_b64, font_debug = file_to_base64(FONT_FILE)
+
+with st.sidebar:
+    st.caption("Asset debug (Streamlit Cloud)")
+    st.write("Logo:", logo_debug)
+    st.write("Font:", font_debug)
+    base_dir = Path(__file__).resolve().parent
+    st.write("Files in app folder:", sorted([x.name for x in base_dir.iterdir() if x.is_file()]))
+
+# =============================
+# CSS (Lobster ONLY for main title)
+# =============================
+font_face = ""
+if font_b64:
+    font_face = f"""
+    @font-face {{
+      font-family: 'LobsterLocal';
+      src: url(data:font/ttf;base64,{font_b64}) format('truetype');
+      font-weight: normal;
+      font-style: normal;
+    }}
+    """
+
+st.markdown(
+    f"""
+<style>
+{font_face}
+
+.block-container {{
+  padding-top: 0.6rem;
+  padding-bottom: 2.2rem;
+  max-width: 1200px;
+}}
+#MainMenu {{visibility: hidden;}}
+footer {{visibility: hidden;}}
+
+.muted {{
+  opacity: 0.76;
+  font-size: 0.93rem;
+  line-height: 1.55;
+}}
+
+.stButton>button, .stDownloadButton>button, .stLinkButton>button {{
+  border-radius: 14px !important;
+  padding: 10px 14px !important;
+  border: 1px solid rgba(120,120,120,0.25) !important;
+}}
+.stButton>button:hover, .stDownloadButton>button:hover, .stLinkButton>button:hover {{
+  transform: translateY(-1px);
+  transition: 120ms ease;
+}}
+button[kind="primary"] {{
+  background: #FFD54A !important;
+  color: #1b1b1b !important;
+  border: 0 !important;
+  box-shadow: 0 10px 24px rgba(255, 213, 74, 0.25) !important;
+}}
+.stButton>button[kind="secondary"] {{
+  background: rgba(255,255,255,0.06) !important;
+}}
+
+[data-testid="stDataFrame"] {{
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid rgba(120,120,120,0.18);
+}}
+
+/* Header (anti-crop) */
+.header-wrap {{
+  padding-top: 26px;        /* space above title */
+  padding-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}}
+/* Big container prevents top crop */
+.logo-box {{
+  height: 120px;            /* key: taller than the logo */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-top: 10px;        /* extra anti-crop */
+}}
+.logo-box img {{
+  height: 80px;             /* BEST SIZE: visible, not cropped */
+  width: auto;
+  object-fit: contain;
+  display: block;
+}}
+
+.main-title {{
+  color: #00C853 !important;
+  font-family: {"'LobsterLocal', cursive" if font_b64 else "system-ui, -apple-system, Segoe UI, Roboto, Arial"} !important;
+  font-size: 2.35rem;
+  font-weight: 400;
+  margin: 0;
+  line-height: 1.05;
+}}
+</style>
+""",
+    unsafe_allow_html=True,
+)
+
+# =============================
+# TITLE (no cropping)
+# =============================
+if logo_b64:
+    st.markdown(
+        f"""
+<div class="header-wrap">
+  <div class="logo-box">
+    <img src="data:image/jpeg;base64,{logo_b64}" alt="Logo">
+  </div>
+  <div class="main-title">Merlyn’s Stock Valuation Dashboard</div>
+</div>
+""",
+        unsafe_allow_html=True,
+    )
+else:
+    st.markdown(
+        """
+<div class="header-wrap">
+  <div class="main-title">Merlyn’s Stock Valuation Dashboard</div>
+</div>
+""",
+        unsafe_allow_html=True,
+    )
+    st.warning("Logo not found. Upload 'MIA logo 5.jpg' into the same folder and commit.")
+
+if not font_b64:
+    st.warning("Lobster font not found. Upload 'Lobster-Regular.ttf' into the same folder and commit.")
+
+# =============================
 # Helpers: sync watchlist with cmpy_id_map
-# -----------------------------
+# =============================
 def normalize_ticker(x: str) -> str:
     return str(x or "").upper().strip()
 
@@ -84,9 +224,9 @@ def sync_watchlist_with_mapping(watchlist: pd.DataFrame, id_map: dict) -> pd.Dat
     wl = wl.sort_values("Ticker").reset_index(drop=True)
     return wl
 
-# -----------------------------
+# =============================
 # PSE Edge fetch + parsing
-# -----------------------------
+# =============================
 @st.cache_data(ttl=60 * 30)
 def fetch_pse_edge_stock_text(cmpy_id: int) -> str:
     url = f"https://edge.pse.com.ph/companyPage/stockData.do?cmpy_id={cmpy_id}"
@@ -124,9 +264,9 @@ def fetch_stock_snapshot(cmpy_id: int) -> dict:
     except Exception:
         return {}
 
-# -----------------------------
-# dividends.ph raw dividends (always fetch)
-# -----------------------------
+# =============================
+# dividends.ph raw dividends
+# =============================
 def _to_float_rate(x: str) -> float | None:
     if x is None:
         return None
@@ -184,12 +324,11 @@ def annual_totals_from_raw(raw_df: pd.DataFrame, years: int = 4) -> list[float]:
     if raw_df is None or raw_df.empty:
         return []
     g = raw_df.groupby("year")["rate"].sum().sort_index()
-    g = g.tail(years)
-    return g.tolist()
+    return g.tail(years).tolist()
 
-# -----------------------------
+# =============================
 # DDM valuation helpers
-# -----------------------------
+# =============================
 def ddm(dividend_next_year: float, discount_rate: float, growth_rate: float) -> float | None:
     if discount_rate <= growth_rate:
         return None
@@ -231,70 +370,9 @@ def dividend_trend(divs: list[float]) -> str:
         return f"↘ Declining (~{cagr*100:.1f}%/yr)"
     return f"→ Flat (~{cagr*100:.1f}%/yr)"
 
-# -----------------------------
-# UI styling
-# -----------------------------
-st.set_page_config(page_title="Merlyn's Stock Valuation Dashboard", page_icon="📈", layout="wide")
-
-font_face = ""
-if lobster_b64:
-    font_face = f"""
-    @font-face {{
-      font-family: 'LobsterLocal';
-      src: url(data:font/ttf;base64,{lobster_b64}) format('truetype');
-      font-weight: normal;
-      font-style: normal;
-    }}
-    """
-
-st.markdown(
-    f"""
-<style>
-{font_face}
-
-.block-container {{ padding-top: 1.0rem; padding-bottom: 2.2rem; max-width: 1200px; }}
-#MainMenu {{visibility: hidden;}}
-footer {{visibility: hidden;}}
-.muted {{ opacity: 0.76; font-size: 0.93rem; line-height: 1.55; }}
-
-.stButton>button, .stDownloadButton>button, .stLinkButton>button {{
-  border-radius: 14px !important;
-  padding: 10px 14px !important;
-  border: 1px solid rgba(120,120,120,0.25) !important;
-}}
-.stButton>button:hover, .stDownloadButton>button:hover, .stLinkButton>button:hover {{
-  transform: translateY(-1px);
-  transition: 120ms ease;
-}}
-button[kind="primary"] {{
-  background: #FFD54A !important;
-  color: #1b1b1b !important;
-  border: 0 !important;
-  box-shadow: 0 10px 24px rgba(255, 213, 74, 0.25) !important;
-}}
-
-[data-testid="stDataFrame"] {{
-  border-radius: 16px;
-  overflow: hidden;
-  border: 1px solid rgba(120,120,120,0.18);
-}}
-
-.title-wrap {{ padding-top: 15px; }}
-.title-green {{
-  color: #00C853;
-  font-family: {'LobsterLocal' if lobster_b64 else 'system-ui, -apple-system, Segoe UI, Roboto, Arial'};
-  margin: 0;
-  padding: 0;
-  line-height: 1.05;
-}}
-</style>
-""",
-    unsafe_allow_html=True,
-)
-
-# -----------------------------
+# =============================
 # Session init
-# -----------------------------
+# =============================
 if "cmpy_id_map" not in st.session_state:
     st.session_state.cmpy_id_map = dict(SEED_CMPY_ID_MAP)
 
@@ -305,25 +383,297 @@ if "watchlist" not in st.session_state:
 
 st.session_state.watchlist = sync_watchlist_with_mapping(st.session_state.watchlist, st.session_state.cmpy_id_map)
 
-# -----------------------------
-# Main Title row: logo + Lobster green title + top padding
-# -----------------------------
-st.markdown('<div class="title-wrap">', unsafe_allow_html=True)
-tcol1, tcol2 = st.columns([0.16, 0.84], vertical_alignment="center")
-with tcol1:
-    try:
-        st.image(LOGO_PATH, width=95)
-    except Exception:
-        st.write("")
-with tcol2:
-    st.markdown('<h2 class="title-green">Merlyn’s Stock Valuation Dashboard</h2>', unsafe_allow_html=True)
-st.markdown('</div>', unsafe_allow_html=True)
+# =============================
+# Explanation + links
+# =============================
+st.markdown(
+    """
+<div class="muted">
+<b>Why valuation is used:</b> Market price can be above or below what a stock is worth based on its ability to return cash to investors.
+Valuation compares <b>price</b> vs an estimated <b>intrinsic value</b> to help you avoid overpaying and identify possible bargains.
 
-# -----------------------------
-# Quick check if Lobster loaded
-# -----------------------------
-if not lobster_b64:
-    st.warning("Lobster font file not found. Upload Lobster-Regular.ttf to your GitHub repo (same folder as the app).")
+<br><br>
+<b>Method used here (Dividend Discount Model — Gordon Growth):</b><br>
+<b>Intrinsic Value = D1 / (r − g)</b>
 
-# (rest of your app remains unchanged…)
-st.info("✅ Font fix applied. Now upload Lobster-Regular.ttf to GitHub and redeploy.")
+<br><br>
+<b>Variables:</b>
+<ul>
+<li><b>D1</b>: next year’s dividend per share (estimated as last annual dividend × (1 + g))</li>
+<li><b>r</b>: discount rate / required return</li>
+<li><b>g</b>: dividend growth rate (estimated from annual dividend totals, capped for stability)</li>
+</ul>
+
+<b>Data sources:</b> Stock snapshot & price from <b>PSE Edge</b> (hidden company id). Raw dividend payments from <b>dividends.ph</b> (last 10 max).
+</div>
+""",
+    unsafe_allow_html=True,
+)
+
+link_c1, link_c2, _ = st.columns([1.2, 1.2, 2])
+with link_c1:
+    st.link_button("PSE Edge Dividend List", "https://edge.pse.com.ph/disclosureData/dividends_and_rights_info_list.ax", use_container_width=True)
+with link_c2:
+    st.link_button("dividends.ph", "https://dividends.ph/", use_container_width=True)
+
+# =============================
+# Add ticker + mapping
+# =============================
+with st.expander("Add Ticker Wizard"):
+    colA, colB, colC = st.columns([1, 1, 1])
+    with colA:
+        new_ticker = st.text_input("Ticker (e.g. MER)", value="", key="wiz_ticker").upper().strip()
+    with colB:
+        new_cmpy = st.text_input("Company ID (cmpy_id) number", value="", key="wiz_cmpy")
+    with colC:
+        add_clicked = st.button("Add", type="secondary", use_container_width=True)
+
+    st.caption("Find company id from URL: https://edge.pse.com.ph/companyPage/stockData.do?cmpy_id=118")
+
+    if add_clicked:
+        if not new_ticker or not new_cmpy.strip().isdigit():
+            st.error("Please enter a ticker and a numeric company id.")
+        else:
+            st.session_state.cmpy_id_map[new_ticker] = int(new_cmpy.strip())
+            st.session_state.watchlist = sync_watchlist_with_mapping(st.session_state.watchlist, st.session_state.cmpy_id_map)
+            st.success(f"Added/updated {new_ticker}.")
+
+with st.expander("Advanced: view/edit company id mapping"):
+    map_df = pd.DataFrame([{"Ticker": t, "Company ID": cid} for t, cid in sorted(st.session_state.cmpy_id_map.items())])
+    edited_map = st.data_editor(map_df, num_rows="dynamic", use_container_width=True, hide_index=True)
+    if st.button("Save company id changes", type="secondary"):
+        new_map = {}
+        for r in edited_map.fillna("").to_dict(orient="records"):
+            t = normalize_ticker(r.get("Ticker", ""))
+            c = str(r.get("Company ID", "")).strip()
+            if t and c.isdigit():
+                new_map[t] = int(c)
+        if new_map:
+            st.session_state.cmpy_id_map.update(new_map)
+            st.session_state.watchlist = sync_watchlist_with_mapping(st.session_state.watchlist, st.session_state.cmpy_id_map)
+            st.success("Saved mapping + synced watchlist.")
+
+st.markdown("---")
+
+# =============================
+# Controls
+# =============================
+c1, c2, c3 = st.columns([1, 1, 1])
+with c1:
+    st.slider("Discount rate (r)", 0.08, 0.15, DEFAULT_DISCOUNT_RATE, key="r")
+with c2:
+    st.slider("Margin of safety", 0.10, 0.40, DEFAULT_MARGIN_OF_SAFETY, key="mos")
+with c3:
+    st.selectbox("Min dividend points", [2, 3, 4], index=0, key="min_divs")
+
+_, mid, _ = st.columns([1, 1.2, 1])
+with mid:
+    run_clicked = st.button("Run valuation", type="primary", use_container_width=True)
+
+st.markdown("---")
+
+# =============================
+# Updated Watchlist
+# =============================
+st.markdown("### Updated Watchlist")
+st.markdown(
+    '<div class="muted">'
+    '<b>Manual dividends:</b> If dividends.ph has no data, type annual totals (oldest → newest) like '
+    '<code>2.5, 3.0, 3.2, 3.4</code>. If left blank, the app tries to derive annual totals from dividends.ph raw payments.'
+    '</div>',
+    unsafe_allow_html=True
+)
+
+wl = st.session_state.watchlist.copy()
+wl["Ticker"] = wl["Ticker"].astype(str).map(normalize_ticker)
+st.session_state.watchlist = st.data_editor(wl, num_rows="dynamic", use_container_width=True, hide_index=True)
+
+st.markdown("---")
+st.markdown("### Results")
+
+# =============================
+# Compute results
+# =============================
+def compute_results(rows: list[dict]) -> tuple[pd.DataFrame, dict, pd.DataFrame]:
+    results = []
+    updated_rows = []
+    per_ticker = {}
+
+    r = float(st.session_state.get("r", DEFAULT_DISCOUNT_RATE))
+    mos = float(st.session_state.get("mos", DEFAULT_MARGIN_OF_SAFETY))
+    min_pts = int(st.session_state.get("min_divs", 2))
+    id_map = st.session_state.cmpy_id_map
+
+    for row in rows:
+        row = dict(row)
+        ticker = normalize_ticker(row.get("Ticker", ""))
+        notes = str(row.get("Notes", "")).strip()
+
+        cmpy_id = id_map.get(ticker)
+        snapshot = fetch_stock_snapshot(cmpy_id) if isinstance(cmpy_id, int) else {}
+        price = snapshot.get("Last Traded Price")
+
+        raw_df = fetch_dividendsph_raw(ticker) if ticker else pd.DataFrame()
+
+        manual_annual = parse_dividends(row.get("Dividends (annual totals, oldest→newest)", ""))
+        annual_used = manual_annual
+        source = "manual" if len(manual_annual) >= 2 else ""
+
+        if len(annual_used) < 2:
+            annual_auto = annual_totals_from_raw(raw_df, years=4)
+            if len(annual_auto) >= 2:
+                annual_used = annual_auto
+                source = "dividends.ph"
+                row["Dividends (annual totals, oldest→newest)"] = ", ".join([str(x) for x in annual_auto])
+
+        trend = dividend_trend(annual_used)
+
+        intrinsic = None
+        buy_below = None
+        status = "Insufficient data"
+
+        if price is not None and len(annual_used) >= min_pts:
+            g = estimate_growth_from_divs(annual_used)
+            d1 = annual_used[-1] * (1 + g)
+            intrinsic = ddm(d1, r, g)
+            if intrinsic is not None:
+                buy_below = intrinsic * (1 - mos)
+                status = (
+                    "Undervalued ✅"
+                    if price < buy_below
+                    else "Fairly Valued ✳️"
+                    if price <= intrinsic
+                    else "Overvalued ⚠️"
+                )
+            else:
+                status = "Invalid (r ≤ g)"
+
+        results.append(
+            {
+                "Ticker": ticker,
+                "Price": price,
+                "Dividend points (annual)": len(annual_used),
+                "Dividend Trend (annual)": trend,
+                "Intrinsic Value": intrinsic,
+                "Buy Below": buy_below,
+                "Valuation": status,
+                "Dividend source": source,
+                "Notes": notes,
+            }
+        )
+
+        per_ticker[ticker] = {
+            "snapshot": snapshot,
+            "divs_annual": annual_used,
+            "raw_payments": raw_df,
+        }
+        updated_rows.append(row)
+
+    df = pd.DataFrame(results)
+    for col in ["Price", "Intrinsic Value", "Buy Below"]:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce").round(2)
+
+    return df, per_ticker, pd.DataFrame(updated_rows)
+
+if run_clicked:
+    st.session_state.watchlist = sync_watchlist_with_mapping(st.session_state.watchlist, st.session_state.cmpy_id_map)
+    rows = st.session_state.watchlist.fillna("").to_dict(orient="records")
+    with st.spinner("Fetching data and computing valuation..."):
+        df, per_ticker, updated_watchlist = compute_results(rows)
+    st.session_state["results_df"] = df
+    st.session_state["per_ticker"] = per_ticker
+    st.session_state.watchlist = updated_watchlist
+
+df = st.session_state.get("results_df")
+per_ticker = st.session_state.get("per_ticker", {})
+
+if isinstance(df, pd.DataFrame) and not df.empty:
+    st.dataframe(df, use_container_width=True)
+
+    st.download_button(
+        "Download results (CSV)",
+        data=df.to_csv(index=False).encode("utf-8"),
+        file_name="pse_valuation_results.csv",
+        mime="text/csv",
+    )
+
+    st.markdown("---")
+    st.markdown("## Stock & Dividend Data")
+
+    tickers_available = df["Ticker"].dropna().unique().tolist()
+    if "selected_ticker" not in st.session_state:
+        st.session_state["selected_ticker"] = tickers_available[0] if tickers_available else ""
+    selected = st.selectbox("Choose ticker", tickers_available, key="selected_ticker")
+
+    info = per_ticker.get(selected, {})
+    snapshot = info.get("snapshot", {}) or {}
+    raw_df = info.get("raw_payments", pd.DataFrame())
+
+    cA, cB = st.columns([1.7, 1.0])
+
+    with cA:
+        st.markdown("### Stock Snapshot (PSE Edge)")
+        snap_df = pd.DataFrame([{"Metric": k, "Value": v} for k, v in snapshot.items() if v is not None])
+        if snap_df.empty:
+            st.info("No snapshot fields parsed for this ticker.")
+        else:
+            snap_df["Value"] = snap_df["Value"].apply(lambda x: f"{x:,.2f}" if isinstance(x, (int, float)) else x)
+            st.dataframe(snap_df, use_container_width=True, hide_index=True)
+
+        st.markdown("---")
+        st.markdown("### Raw Dividends (dividends.ph) — last 10 max")
+
+        if isinstance(raw_df, pd.DataFrame) and not raw_df.empty:
+            raw10 = raw_df.copy().sort_values("payment_date", ascending=False).head(10).reset_index(drop=True)
+            raw10_for_plot = raw10.sort_values("payment_date").reset_index(drop=True)
+            raw10_for_plot["Dividend #"] = range(1, len(raw10_for_plot) + 1)
+
+            left_raw, right_raw = st.columns([1.2, 1.0])
+
+            with left_raw:
+                fig_raw = plt.figure(facecolor="#111318")
+                axr = plt.gca()
+                axr.set_facecolor("#111318")
+
+                axr.plot(raw10_for_plot["payment_date"], raw10_for_plot["rate"], marker="o", linewidth=1)
+                axr.set_title(f"{selected} raw dividends (last {len(raw10_for_plot)})", fontsize=10)
+                axr.set_xlabel("Payment date (MM-YY)", fontsize=7)
+                axr.set_ylabel("Dividend rate", fontsize=7)
+
+                # ONLY show x-axis ticks for the plotted dates (no extra ticks)
+                x_dates = mdates.date2num(raw10_for_plot["payment_date"].dt.to_pydatetime())
+                axr.xaxis.set_major_locator(FixedLocator(x_dates))
+                axr.xaxis.set_major_formatter(mdates.DateFormatter("%m-%y"))
+
+                axr.tick_params(axis="x", labelsize=6)
+                axr.tick_params(axis="y", labelsize=7)
+
+                # Label each point with Dividend #
+                for _, rrow in raw10_for_plot.iterrows():
+                    axr.annotate(
+                        str(int(rrow["Dividend #"])),
+                        (rrow["payment_date"], rrow["rate"]),
+                        textcoords="offset points",
+                        xytext=(0, 6),
+                        ha="center",
+                        fontsize=7,
+                    )
+
+                fig_raw.autofmt_xdate(rotation=0)
+                fig_raw.tight_layout()
+                st.pyplot(fig_raw)
+
+            with right_raw:
+                raw10_tbl = raw10_for_plot.copy()
+                raw10_tbl["Payment (MM-YY)"] = raw10_tbl["payment_date"].dt.strftime("%m-%y")
+                raw10_tbl["Ex (MM-YY)"] = raw10_tbl["ex_date"].dt.strftime("%m-%y")
+                raw10_tbl = raw10_tbl[["Dividend #", "Payment (MM-YY)", "Ex (MM-YY)", "rate", "year"]]
+                raw10_tbl = raw10_tbl.rename(columns={"rate": "Dividend rate", "year": "Year"})
+                st.dataframe(raw10_tbl, use_container_width=True, hide_index=True)
+        else:
+            st.warning("No raw dividend records found on dividends.ph for this ticker.")
+else:
+    st.info("Click Run valuation to generate results.")
+
+st.markdown('<div class="muted">⚠️ Personal-use educational tool — not financial advice.</div>', unsafe_allow_html=True)
